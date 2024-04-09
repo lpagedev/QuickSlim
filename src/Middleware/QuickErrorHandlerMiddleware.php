@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace QuickSlim\Middleware;
 
-use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -32,19 +31,40 @@ class QuickErrorHandlerMiddleware implements MiddlewareInterface
         try {
             return $handler->handle($request);
         } catch (Throwable $exception) {
-            if ($this->_showErrors) return new QuickJsonResponse(['message' => $this->ReplaceError($exception->getMessage()), 'exception' => $exception->getMessage(), 'file' => $exception->getFile(), 'line' => $exception->getLine(), 'code' => $exception->getCode(), 'trace' => $exception->getTrace(),], StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR);
-            return new QuickJsonResponse(['message' => $this->ReplaceError($exception->getMessage())], StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR);
+            $requestHeaders = $request->getHeaderLine('Access-Control-Request-Headers');
+
+            header('Content-Type: application/json', true, 500);
+            header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? $_SERVER['REMOTE_ADDR']);
+            header('Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS');
+            header('Access-Control-Allow-Headers: ' . $requestHeaders);
+            header('Access-Control-Allow-Credentials: true');
+
+            $message = $exception->getMessage();
+            try {
+                $message = $this->ReplaceError($exception->getMessage());
+            } catch (Throwable $exception) {
+                $message .= PHP_EOL . $exception->getMessage();
+            }
+
+            if ($this->_showErrors) print json_encode(['message' => $message, 'exception' => $exception->getMessage(), 'file' => $exception->getFile(), 'line' => $exception->getLine(), 'code' => $exception->getCode(), 'trace' => $exception->getTrace()]); else
+                print json_encode(['message' => $message, 'exception' => $exception->getMessage(), 'file' => '', 'line' => 0, 'code' => '', 'trace' => []]);
+            exit();
         }
     }
 
     private function ReplaceError(string $errorMessage = ""): string
     {
         foreach ($this->_config as $replacement) {
-            if (str_contains($errorMessage, $replacement['error'])) return $replacement['replacement'];
+            if (str_contains($errorMessage, $replacement->getErrorText())) return $replacement->getReplacementText();
+
             $regexMatches = [];
-            $regexReplacementMatches = [];
-            if (preg_match("/{$replacement->getErrorText()}/", $errorMessage, $regexMatches)) if (preg_match('(\$(\d+))', $replacement->getReplacementText(), $regexReplacementMatches)) for ($count = 0; $count < count($regexReplacementMatches); $count++) $replacement['replacement'] = str_replace($regexReplacementMatches[$count], $regexMatches[(int)$regexReplacementMatches[1]], $replacement->getReplacementText()); else
-                return $replacement['replacement'];
+            if (preg_match("/{$replacement->getErrorText()}/", $errorMessage, $regexMatches)) {
+                $replacementText = $replacement->getReplacementText();
+                for ($count = 1; $count < count($regexMatches); $count++) {
+                    $replacementText = preg_replace('/([^\\\]?\$\d+)/', $regexMatches[$count], $replacementText, 1);
+                }
+                return $replacementText;
+            }
 
         }
         return $errorMessage;
