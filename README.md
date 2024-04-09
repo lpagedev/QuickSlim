@@ -1,2 +1,4 @@
 # QuickSlim
-QuickSlim, a collection of controllers, middleware, and classes to make developing apps and sites with Slim Framework quickly.
+QuickSlim, a collection of utilities to make developing apis with Slim Framework quick.
+
+Currently, database classes only work with SqlServer, may add support for others later...

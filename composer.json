@@ -1,0 +1,28 @@
+{
+  "name": "lpagedev/quickslim",
+  "description": "QuickSlim, a collection of controllers, middleware, and classes to make developing apps and sites with Slim Framework quickly.",
+  "version": "0.1.0",
+  "type": "library",
+  "require-dev": {
+    "php": "^8.0",
+    "ext-json": "*",
+    "ext-fileinfo": "*",
+    "ext-sqlsrv": "*",
+    "ext-mbstring": "*",
+    "doctrine/dbal": "@stable",
+    "slim/psr7": "@stable",
+    "slim/slim": "@stable"
+  },
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "QuickSlim\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Levi Page"
+    }
+  ],
+  "minimum-stability": "stable"
+}
