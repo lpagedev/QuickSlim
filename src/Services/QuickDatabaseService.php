@@ -9,7 +9,7 @@ use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\Table;
 
-class DatabaseService
+class QuickDatabaseService
 {
     private Connection $_connection;
     private string $_idKey;
@@ -39,28 +39,28 @@ class DatabaseService
     /**
      * @throws Exception
      */
-    public function DeleteRecord(string $table, string $id): int|false
+    public function DeleteRecord(string $table, string $id): bool
     {
         $queryBuilder = $this->_connection->createQueryBuilder();
         $queryBuilder = $queryBuilder->delete("[$table]");
         $queryBuilder = $queryBuilder->where("[$this->_idKey] = " . $queryBuilder->createNamedParameter($id));
 
         $this->_connection->beginTransaction();
-        $resultSet = $queryBuilder->executeStatement();
+        $queryBuilder->executeStatement();
         $this->_connection->commit();
 
-        return $resultSet;
+        return true;
     }
 
     /**
      * @throws Exception
      */
-    public function ExecuteStatement(string $statement, ?array $parameters = [], $transactional = true): int
+    public function ExecuteStatement(string $statement, ?array $parameters = [], $transactional = true): bool
     {
         if ($transactional) $this->_connection->beginTransaction();
-        $resultSet = $this->_connection->executeStatement($statement, $parameters);
+        $this->_connection->executeStatement($statement, $parameters);
         if ($transactional) $this->_connection->commit();
-        return $resultSet;
+        return true;
     }
 
     /**
@@ -177,33 +177,24 @@ class DatabaseService
     public function UpdateRecord($table, $id, $record): bool
     {
         $existingRecord = $this->SelectRecord($table, $id);
+        foreach ($record as $key => $value) if (is_string($value) && trim($value) === '') $record[$key] = null;
+        $record = array_diff_assoc($record, $existingRecord);
 
-        $changedValue = [];
-        foreach ($record as $newKey => $newValue) {
-            foreach ($existingRecord as $existingKey => $existingValue) {
-                if ($newKey === "_$existingKey" || $newKey === $existingKey) {
-                    if (is_string($newValue) && trim($newValue) === '') $newValue = null;
-                    $changedValue[$existingKey] = $newValue;
-                }
-            }
-        }
-
-        if (count($changedValue) === 0) return false;
+        if (count($record) === 0) return false;
 
         $queryBuilder = $this->_connection->createQueryBuilder();
         $queryBuilder = $queryBuilder->update("[$table]");
 
-        foreach ($changedValue as $key => $value) {
+        foreach ($record as $key => $value) {
             $queryBuilder = $queryBuilder->set("[$key]", $queryBuilder->createNamedParameter($value));
         }
-
         $queryBuilder = $queryBuilder->where("[$this->_idKey] = " . $queryBuilder->createNamedParameter($id));
 
         $this->_connection->beginTransaction();
-        $resultSet = $queryBuilder->executeStatement();
+        $queryBuilder->executeStatement();
         $this->_connection->commit();
 
-        return $resultSet > 0;
+        return true;
     }
 
     /**
