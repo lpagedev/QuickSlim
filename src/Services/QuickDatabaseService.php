@@ -72,7 +72,7 @@ class QuickDatabaseService
         $queryBuilder = $queryBuilder->insert("[$table]");
 
         $validColumns = $this->GetColumnNames($table);
-        $record[$this->_idKey] = $record[$this->_idKey] ?? $this->GetUniqueId();
+        $record[$this->_idKey] = (is_string($record[$this->_idKey]) && trim($record[$this->_idKey]) !== '') ? $record[$this->_idKey] : $this->GetUniqueId();
         foreach ($record as $key => $value) {
             if (in_array($key, $validColumns)) {
                 if ((is_string($value) && trim($value) == '') || $value == null) continue;
@@ -139,14 +139,15 @@ class QuickDatabaseService
     /**
      * @throws Exception
      */
-    public function SelectRecord(string $table, string $id): array
+    public function SelectRecord(string $table, string $id): array|null
     {
         $queryBuilder = $this->_connection->createQueryBuilder();
         $queryBuilder = $queryBuilder->select('*');
         $queryBuilder = $queryBuilder->from("[$table]");
         $queryBuilder = $queryBuilder->where("[$this->_idKey] = " . $queryBuilder->createNamedParameter($id));
         $resultSet = $queryBuilder->executeQuery();
-        return $resultSet->fetchAssociative();
+        $record = $resultSet->fetchAssociative();
+        return ($record) ?: null;
     }
 
     /**
@@ -177,6 +178,7 @@ class QuickDatabaseService
     public function UpdateRecord($table, $id, $record): bool
     {
         $existingRecord = $this->SelectRecord($table, $id);
+        if ($existingRecord === null) return false;
         foreach ($record as $key => $value) if (is_string($value) && trim($value) === '') $record[$key] = null;
         $record = array_diff_assoc($record, $existingRecord);
 
