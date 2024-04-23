@@ -13,11 +13,13 @@ class QuickDatabaseService
 {
     private Connection $_connection;
     private string $_idKey;
+    private string $_defaultNamespace;
 
-    public function __construct(Connection $connection, string $idKey = 'id')
+    public function __construct(Connection $connection, string $idKey = 'id', string $defaultNamespace = 'dbo')
     {
         $this->_connection = $connection;
         $this->_idKey = $idKey;
+        $this->_defaultNamespace = $defaultNamespace;
     }
 
     public function GetConnection(): Connection
@@ -39,10 +41,11 @@ class QuickDatabaseService
     /**
      * @throws Exception
      */
-    public function DeleteRecord(string $table, string $id): bool
+    public function DeleteRecord(string $id, string $table, string|null $namespace = null): bool
     {
+        $namespace = $namespace ?? $this->_defaultNamespace;
         $queryBuilder = $this->_connection->createQueryBuilder();
-        $queryBuilder = $queryBuilder->delete("[$table]");
+        $queryBuilder = $queryBuilder->delete("[$namespace].[$table]");
         $queryBuilder = $queryBuilder->where("[$this->_idKey] = " . $queryBuilder->createNamedParameter($id));
 
         $this->_connection->beginTransaction();
@@ -66,12 +69,13 @@ class QuickDatabaseService
     /**
      * @throws Exception
      */
-    public function InsertRecord(string $table, array $record): array
+    public function InsertRecord(array $record, string $table, string|null $namespace = null): array
     {
+        $namespace = $namespace ?? $this->_defaultNamespace;
         $queryBuilder = $this->_connection->createQueryBuilder();
-        $queryBuilder = $queryBuilder->insert("[$table]");
+        $queryBuilder = $queryBuilder->insert("[$namespace].[$table]");
 
-        $validColumns = $this->GetColumnNames($table);
+        $validColumns = $this->GetColumnNames("[$namespace].[$table]");
         $record[$this->_idKey] = (is_string($record[$this->_idKey]) && trim($record[$this->_idKey]) !== '') ? $record[$this->_idKey] : $this->GetUniqueId();
         foreach ($record as $key => $value) {
             if (in_array($key, $validColumns)) {
@@ -84,13 +88,13 @@ class QuickDatabaseService
         $queryBuilder->executeStatement();
         $this->_connection->commit();
 
-        return $this->SelectRecord($table, $record[$this->_idKey]);
+        return $this->SelectRecord($record[$this->_idKey], $table, $namespace);
     }
 
     /**
      * @throws Exception
      */
-    public function GetColumnNames($table): array
+    public function GetColumnNames(string $table): array
     {
         $results = [];
         $columns = $this->GetColumns($table);
@@ -102,7 +106,7 @@ class QuickDatabaseService
      * @return Column[]
      * @throws Exception
      */
-    public function GetColumns($table): array
+    public function GetColumns(string $table): array
     {
         $schemaManager = $this->_connection->createSchemaManager();
         return $schemaManager->listTableColumns($table);
@@ -139,11 +143,12 @@ class QuickDatabaseService
     /**
      * @throws Exception
      */
-    public function SelectRecord(string $table, string $id): array|null
+    public function SelectRecord(string $id, string $table, string|null $namespace = null): array|null
     {
+        $namespace = $namespace ?? $this->_defaultNamespace;
         $queryBuilder = $this->_connection->createQueryBuilder();
         $queryBuilder = $queryBuilder->select('*');
-        $queryBuilder = $queryBuilder->from("[$table]");
+        $queryBuilder = $queryBuilder->from("[$namespace].[$table]");
         $queryBuilder = $queryBuilder->where("[$this->_idKey] = " . $queryBuilder->createNamedParameter($id));
         $resultSet = $queryBuilder->executeQuery();
         $record = $resultSet->fetchAssociative();
@@ -175,9 +180,9 @@ class QuickDatabaseService
     /**
      * @throws Exception
      */
-    public function UpdateRecord($table, $id, $record): bool
+    public function UpdateRecord(string $id, mixed $record, string $table, string|null $namespace = null): bool
     {
-        $existingRecord = $this->SelectRecord($table, $id);
+        $existingRecord = $this->SelectRecord($id, $table, $namespace);
         if ($existingRecord === null) return false;
         foreach ($record as $key => $value) if (is_string($value) && trim($value) === '') $record[$key] = null;
         $record = array_diff_assoc($record, $existingRecord);
@@ -185,7 +190,7 @@ class QuickDatabaseService
         if (count($record) === 0) return false;
 
         $queryBuilder = $this->_connection->createQueryBuilder();
-        $queryBuilder = $queryBuilder->update("[$table]");
+        $queryBuilder = $queryBuilder->update("[$namespace].[$table]");
 
         foreach ($record as $key => $value) {
             $queryBuilder = $queryBuilder->set("[$key]", $queryBuilder->createNamedParameter($value));
